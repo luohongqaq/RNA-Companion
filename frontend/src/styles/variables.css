@@ -1,0 +1,17 @@
+/* 设计令牌 — 当前界面实际引用的最小集合 */
+:root {
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-text-on-primary: #FFFFFF;
+  --color-bg-hover: rgba(37, 99, 235, 0.06);
+  --color-window-close: #E81123;
+  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  --color-scrollbar: rgba(30, 64, 175, 0.14);
+  --color-scrollbar-hover: rgba(30, 64, 175, 0.26);
+  --radius-sm: 8px;
+  --font-size-base: 14px;
+  --line-height-normal: 1.6;
+  --letter-spacing-normal: 0.01em;
+  --font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}

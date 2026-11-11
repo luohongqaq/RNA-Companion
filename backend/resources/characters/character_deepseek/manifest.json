@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "character_id": "character_deepseek",
+  "name": "deepseek",
+  "user_appellation": "主人",
+  "file_base": "character_directory",
+  "backgrounds": {
+    "default_id": "bedroom",
+    "items": [
+      {
+        "id": "bedroom",
+        "name": "卧室",
+        "file": "background/bedroom.png"
+      },
+      {
+        "id": "study",
+        "name": "书房",
+        "file": "background/study.png"
+      }
+    ]
+  },
+  "expression": {
+    "filename_template": "expression/{outfit_id}__{pose_id}__{expression_id}.png",
+    "default": {
+      "outfit_id": "outfit_01",
+      "pose_id": "pose_a",
+      "expression_id": "expr_010"
+    },
+    "outfits": {
+      "outfit_01": {
+        "name": "女仆服（原版）",
+        "source_code": "psd01",
+        "default_pose_id": "pose_a",
+        "default_expression_id": "expr_010"
+      }
+    },
+    "poses": {
+      "pose_a": {
+        "name": "正面自然站姿",
+        "description": "身体正对画面，双臂自然垂下"
+      }
+    },
+    "expressions": {
+      "expr_010": {
+        "name": "微笑·开心",
+        "source_code": "smile",
+        "enabled": true,
+        "description": "眼睛弯成月牙的笑；高兴、被逗乐、满意时"
+      },
+      "expr_020": {
+        "name": "自信·从容",
+        "source_code": "Confident",
+        "enabled": true,
+        "description": "从容笃定的浅笑；胸有成竹、自信满满时"
+      },
+      "expr_030": {
+        "name": "困惑·不解",
+        "source_code": "puzzled",
+        "enabled": true,
+        "description": "眉头微蹙、微张着嘴；没听懂、疑惑时"
+      },
+      "expr_040": {
+        "name": "惊讶·意外",
+        "source_code": "surprised",
+        "enabled": true,
+        "description": "微微睁大眼；小小的吃惊、出乎意料时"
+      },
+      "expr_050": {
+        "name": "震惊·呆住",
+        "source_code": "shock",
+        "enabled": true,
+        "description": "瞳孔地震、大张着嘴；受到冲击、当场愣住时"
+      },
+      "expr_060": {
+        "name": "害羞·脸红",
+        "source_code": "shy",
+        "enabled": true,
+        "description": "脸颊绯红抿嘴笑；被夸、不好意思时"
+      },
+      "expr_070": {
+        "name": "慌张·失措",
+        "source_code": "flustered",
+        "enabled": true,
+        "description": "慌乱脸红；手忙脚乱、被戳中时"
+      },
+      "expr_080": {
+        "name": "缓冲·加载",
+        "source_code": "buffering",
+        "enabled": true,
+        "description": "放空嘟嘴；思考卡壳、脑子正在加载时"
+      },
+      "expr_090": {
+        "name": "困倦·犯懒",
+        "source_code": "sleepy",
+        "enabled": true,
+        "description": "半睁着眼；没电了、想睡、松弛犯懒时"
+      },
+      "expr_100": {
+        "name": "嘟嘴·不满",
+        "source_code": "Pouting",
+        "enabled": true,
+        "description": "委屈嘟嘴；闹小脾气、不服气时"
+      },
+      "expr_110": {
+        "name": "嘴馋·眼馋",
+        "source_code": "greedy",
+        "enabled": true,
+        "description": "两眼放光流口水；看到好吃的、渴望时"
+      },
+      "expr_120": {
+        "name": "调皮·坏笑",
+        "source_code": "mischievous_smile",
+        "enabled": true,
+        "description": "眉眼弯弯的坏笑；顽皮、想到鬼点子时"
+      }
+    },
+    "fallback_policy": {
+      "description": "只选择 enabled=true 的资源；按顺序取首个实际存在的组合。此清单描述策略，API 接入时实现。",
+      "order": [
+        "requested_outfit_requested_pose_requested_expression",
+        "requested_outfit_requested_pose_default_expression",
+        "requested_outfit_default_pose_requested_expression",
+        "requested_outfit_default_pose_default_expression",
+        "character_default"
+      ]
+    },
+    "assets": [
+      {
+        "asset_id": "outfit_01__pose_a__expr_010",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_010",
+        "file": "expression/outfit_01__pose_a__expr_010.png",
+        "source_filename": "smile.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_020",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_020",
+        "file": "expression/outfit_01__pose_a__expr_020.png",
+        "source_filename": "Confident.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_030",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_030",
+        "file": "expression/outfit_01__pose_a__expr_030.png",
+        "source_filename": "puzzled.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_040",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_040",
+        "file": "expression/outfit_01__pose_a__expr_040.png",
+        "source_filename": "surprised.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_050",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_050",
+        "file": "expression/outfit_01__pose_a__expr_050.png",
+        "source_filename": "shock.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_060",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_060",
+        "file": "expression/outfit_01__pose_a__expr_060.png",
+        "source_filename": "shy.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_070",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_070",
+        "file": "expression/outfit_01__pose_a__expr_070.png",
+        "source_filename": "flustered.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_080",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_080",
+        "file": "expression/outfit_01__pose_a__expr_080.png",
+        "source_filename": "buffering.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_090",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_090",
+        "file": "expression/outfit_01__pose_a__expr_090.png",
+        "source_filename": "sleepy.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_100",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_100",
+        "file": "expression/outfit_01__pose_a__expr_100.png",
+        "source_filename": "Pouting.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_110",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_110",
+        "file": "expression/outfit_01__pose_a__expr_110.png",
+        "source_filename": "greedy.png",
+        "enabled": true
+      },
+      {
+        "asset_id": "outfit_01__pose_a__expr_120",
+        "outfit_id": "outfit_01",
+        "pose_id": "pose_a",
+        "expression_id": "expr_120",
+        "file": "expression/outfit_01__pose_a__expr_120.png",
+        "source_filename": "mischievous_smile.png",
+        "enabled": true
+      }
+    ]
+  }
+}

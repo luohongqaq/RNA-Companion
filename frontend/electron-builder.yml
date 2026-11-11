@@ -1,0 +1,27 @@
+# 便携版打包配置：产物为免安装目录（win-unpacked），与 backend/ 组合成发行 zip。
+# 构建命令：npm run electron:dist
+appId: com.rna.companion
+productName: RNA Companion
+directories:
+  output: release-build
+files:
+  - "dist/**"
+  - "dist-electron/**"
+  - "package.json"
+# asar 归档会被本机实时扫描进程锁定导致打包 EBUSY，便携版直接以明文目录分发。
+asar: false
+# 复用 npm 安装好的 Electron 运行时，避免打包时再从网络下载 ~100 MB zip。
+electronDist: node_modules/electron/dist
+# 图标随包分发：main.ts 的 getAppIcon() 与托盘在打包模式下读 resources/icon/icon.png
+extraResources:
+  - from: build
+    to: icon
+    filter:
+      - icon.png
+win:
+  # dir 目标：免安装目录。GUI 子系统产物，双击无控制台黑窗。
+  target:
+    - target: dir
+      arch:
+        - x64
+  icon: build/icon.ico

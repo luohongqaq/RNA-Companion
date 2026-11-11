@@ -1,0 +1,70 @@
+# 自动发版：推送 v* 标签时构建便携版 zip 并挂到 GitHub Release。
+# 手动触发：git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-portable:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm ci
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      # electron-builder.yml 用 electronDist 复用本地已装好的 Electron 运行时，
+      # 但 CI 里 npm ci 之后的 postinstall 不保证把二进制解压到 node_modules/electron/dist。
+      # 这里显式跑一次 install.js 补齐，否则打包会报 "specified electronDist does not exist"。
+      - name: 准备 Electron 运行时
+        working-directory: frontend
+        run: node node_modules/electron/install.js
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 校验 Electron 运行时
+        working-directory: frontend
+        run: |
+          if (-not (Test-Path "node_modules/electron/dist/electron.exe")) {
+            throw "Electron 运行时缺失，electronDist 仍不可用"
+          }
+          "Electron 运行时就绪"
+
+      - name: 构建便携版 exe
+        working-directory: frontend
+        run: npm run electron:dist
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 组装发行 zip
+        run: python scripts/assemble_release.py --version $env:GITHUB_REF_NAME
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip

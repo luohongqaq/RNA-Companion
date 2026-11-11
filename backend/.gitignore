@@ -1,0 +1,5 @@
+/var/
+/memory_record/database/
+
+# 角色语音包：声优语料和微调权重，严禁入库
+/resources/characters/*/voice/

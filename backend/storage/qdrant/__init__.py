@@ -1,0 +1,2 @@
+"""Qdrant search-index adapter."""
+

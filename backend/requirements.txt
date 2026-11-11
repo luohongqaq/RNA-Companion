@@ -1,0 +1,19 @@
+# 运行时依赖
+fastapi==0.115.*
+anyio>=3.6.2,<5
+uvicorn[standard]==0.30.*
+pydantic-settings>=2.6
+PyYAML>=6.0
+openai>=1.0.0
+qdrant-client>=1.19.1
+FlagEmbedding>=1.4
+transformers>=4.45,<5
+SQLAlchemy[asyncio]>=2.0,<2.1
+aiosqlite>=0.20,<1
+jinja2>=3.1,<4
+# 模型设置读写 .env
+python-dotenv>=1.0
+
+# 本地模型下载脚本 backend/scripts/download_models.py
+modelscope>=1.9
+huggingface_hub>=0.24

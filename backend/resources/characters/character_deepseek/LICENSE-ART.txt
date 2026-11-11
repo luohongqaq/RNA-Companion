@@ -1,0 +1,39 @@
+本目录（backend/resources/characters/character_deepseek/）的图像资源分两部分，许可不同：
+
+────────────────────────────────────────
+一、expression/ —— 12 张表情差分立绘
+────────────────────────────────────────
+由第三方同人作品《DeepSeek 鲸鱼娘人物立绘》导出合成，采用：
+
+Creative Commons 署名-非商业性使用-相同方式共享 4.0 国际
+(CC BY-NC-SA 4.0)
+https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh-hans
+
+原作者（源自原始 PSD 署名层）：
+  1st Author: 上善无形  https://space.bilibili.com/4168597
+  2nd Author: ZipzipPipe  https://space.bilibili.com/4168597
+  3rd Author: Rafistev  https://www.xiaoheihe.cn/app/user/profile/64737533
+原始声明：This work is licensed under CC BY-NC-SA 4.0. Changes were made.
+
+修改说明（Changes were made）：
+  本仓库从原始 PSD 隐藏背景与阴影组导出透明底全身立绘；
+  按表情组分别合成 12 张表情差分；缩放至 1310x2359 并压缩；
+  人物设计本身未作改动。
+
+注意：
+  1. expression/ 不适用仓库根目录的 MIT 许可证。
+  2. 仅限非商业使用；商业使用需自行取得原作者授权，
+     或替换 expression/ 目录下的立绘。
+  3. 对这批图片的再修改，须继续以 CC BY-NC-SA 4.0 发布并署名。
+
+────────────────────────────────────────
+二、background/ —— bedroom.png、study.png 两张场景背景
+────────────────────────────────────────
+为本项目作者自行 AI 生成，不包含第三方素材，
+随仓库以 MIT 许可证（见根目录 LICENSE）分发，可商用。
+
+────────────────────────────────────────
+三、文本文件
+────────────────────────────────────────
+本目录中的 Markdown 文本（角色卡、系统提示词、语气提示词）与 manifest.json
+为本项目原创，适用仓库的 MIT 许可证。

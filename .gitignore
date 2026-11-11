@@ -1,0 +1,31 @@
+node_modules/
+dist/
+dist-electron/
+*.tsbuildinfo
+.idea/
+.vscode/
+.pytest_cache/
+.deepeval/
+__pycache__/
+*.py[cod]
+backend/.venv/
+backend/var/
+backend/config/local.yaml
+# 角色目录默认忽略（本机角色不入库），随仓库分发的角色逐个放行
+backend/resources/characters/*
+!backend/resources/characters/character_deepseek/
+!backend/resources/characters/README.md
+backend/models/
+backend/docs/
+# 内部记忆自检工具：依赖外部 seed.py，且含个人演示数据
+backend/api/cli/seed_memories.py
+.env
+
+design-preview/
+
+frontend/.verify/
+frontend/release-build/
+frontend/release/
+
+# 文档截图用的示例数据（scripts/seed_preview_data.py 生成）
+.preview-data/
