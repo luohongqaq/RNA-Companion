@@ -43,10 +43,11 @@ class SaveMessageInput:
 
 @dataclass(frozen=True, slots=True)
 class CreateConversation:
-    """创建对话"""
+    """创建对话；with_session 为真时同时开好第一个空会话。"""
     conversation_id: str
     character_id: str
     title: str | None
+    with_session: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,21 @@ class RenameConversationTitle:
 class ArchiveConversation:
     """归档对话"""
     conversation_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SealSession:
+    """封存一段会话，让已发生的对话进入记忆生产，并由同一次操作开启后继会话。"""
+    conversation_id: str
+    session_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SealSessionResult:
+    """封存结果：被封存的会话与接替它的会话；等待超时时接替会话为 None。"""
+    conversation_id: str
+    sealed_session_id: str
+    current_session_id: str | None
 
 
 @dataclass(frozen=True, slots=True)

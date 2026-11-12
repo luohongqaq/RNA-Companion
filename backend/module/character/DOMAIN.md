@@ -5,9 +5,9 @@
 | 数据 | 功能与位置 |
 | --- | --- |
 | [CharacterInfo](core/domain/resources.py) | 角色 ID、名称、资源目录和对用户的称呼。 |
-| [CharacterCard、CharacterReply](core/domain/models.py) | 角色卡正文与来源；角色回复正文及视觉状态。 |
+| [CharacterCard、CharacterReply](core/domain/models.py) | 角色卡正文、来源，以及角色对用户的称呼（user_appellation，供记忆总结替换称谓）；角色回复正文及视觉状态。 |
 | [CharacterPrompt、PromptType](core/domain/prompts.py) | 一种提示词的正文、类型和版本；保存时版本用于并发检查。 |
-| [CharacterCardDocument、CharacterSelectionView](../shared/character/document.py) | 从角色卡正文提取六节规则，提供六节标题的登记校验，并记录正文的来源哈希。 |
+| [CharacterCardDocument、CharacterSelectionView](../shared/character/document.py) | 从角色卡正文提取六节规则，提供六节标题的登记校验，记录正文的来源哈希，并带上角色对用户的称呼（记忆总结用作占位替换）。 |
 
 ## 背景和立绘
 

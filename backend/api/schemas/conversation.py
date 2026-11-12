@@ -12,6 +12,7 @@ class CreateConversationRequest(BaseModel):
 
     character_id: str = Field(min_length=1, max_length=128)
     title: str | None = Field(default=None, min_length=1, max_length=200)
+    with_session: bool = False
 
 class ConversationResponse(BaseModel):
     """conversation响应的 HTTP 契约。"""
@@ -23,6 +24,14 @@ class ConversationResponse(BaseModel):
     current_session_id: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class SealSessionResponse(BaseModel):
+    """封存结果的 HTTP 契约：接替会话为空表示摘要仍在生成。"""
+    conversation_id: str
+    sealed_session_id: str
+    current_session_id: str | None
+    pending: bool
 
 
 class ConversationPageResponse(BaseModel):

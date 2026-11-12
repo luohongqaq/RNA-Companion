@@ -26,6 +26,7 @@ flowchart LR
 | 入口 | 关键代码 | 作用 |
 | --- | --- | --- |
 | 会话、消息与事件 | [conversation/core/processing](conversation/core/processing/) | 会话管理、消息接收、历史查询、事件读取。 |
+| 会话封存 | [SessionSealService](conversation/core/processing/seal.py) | 手动把当前窗口推进到交接：登记摘要、置等待交接、等后继会话接替。 |
 | 回复准备与生成 | [GenerationWorkflow](reply/core/scheduling/workflow.py) | 驱动读取上下文、冻结提示词、生成和采用。 |
 | 场景召回 | [SceneRuntime](scenes_recall/repository/runtime.py)、[QdrantSceneRecall](scenes_recall/repository/retrieval.py) | 根据角色和近期对话检索场景示例。 |
 | 依赖装配 | [api/container.py](../../api/container.py) | 注入仓储、模型、上下文、记忆、场景和后台 Worker。 |
@@ -58,7 +59,7 @@ flowchart TD
     H[事件订阅] --> I[ChatEventService<br/>按游标读取及等待事件]
 ```
 
-请求回执与消息、任务的持久化属于接收事务；通知只加速任务处理。消息路由和去重的具体条件见仓储，不由前端回执推断模型已回复。
+请求回执与消息、任务的持久化属于接收事务；通知只加速任务处理。消息路由和去重的具体条件见仓储，不由前端回执推断模型已回复。创建对话时可以带 `with_session`，在同一事务里开好第一个空会话；归档后重建的对话需要立刻有可用窗口，靠的就是这个开关。
 
 | 职责 | 关键代码 |
 | --- | --- |
@@ -66,6 +67,27 @@ flowchart TD
 | 消息接收、历史和正式回复查询 | [messages.py](conversation/core/processing/messages.py)、[SQLiteChatRepository](conversation/repository/sqlite.py) |
 | 事件读取与订阅 | [events.py](conversation/core/processing/events.py)、[事件类型](conversation/core/domain/events.py) |
 | 持久化映射 | [conversation/repository/mappers.py](conversation/repository/mappers.py) |
+
+## 会话封存：手动换窗口
+
+自动交接由窗口用量触发（见[上下文压缩](../context_compaction/ARCHITECTURE.md)），手动封存复用同一条流水线：
+
+```mermaid
+flowchart TD
+    A[POST conversations/id/sessions/id/seal] --> B[seal_target<br/>核对对话与会话可封存<br/>返回最后一轮序号]
+    B --> C[prepare_handoff<br/>登记摘要任务，同边界沿用原任务]
+    C --> D[mark_waiting_handoff<br/>会话置 WAITING_HANDOFF]
+    D --> E[commit_handoff<br/>摘要已就绪则当场换窗口]
+    E --> F[200 current_session_id]
+    E -->|暂无| G[轮询 0.5 秒，最长 180 秒]
+    G --> H{读到新 session / 任务 FAILED / 超时}
+    H -->|FAILED| I[commit_degraded_handoff<br/>丢弃摘要，只带冻结点后的原文]
+    I --> F
+    I -->|交不出| J[release_handoff<br/>会话回到 OPEN]
+    H -->|超时| K[202 pending]
+```
+
+封存前会拒绝空会话、还有未完成回复、不是当前会话、已经封存的会话。交接失败时不能让对话停在等待状态，所以先尝试降级交接，降级也交不出东西才回滚到可继续聊天并报错。
 
 ## Reply：固定输入到正式回复
 
@@ -78,12 +100,12 @@ flowchart TD
     D --> E[PromptBuilder 组装并检查预算]
     E --> F[freeze_prompt<br/>T2-B 冻结提示词]
     F --> G[NEED_GENERATE<br/>调用回复模型]
-    G --> H[校验完整 JSON 和视觉名称<br/>保存候选]
+    G --> H[校验完整 JSON、视觉名称<br/>与台词是否说完<br/>保存候选]
     H --> I[NEED_ACCEPT<br/>核对资格并采用 T3]
     I --> K[正式回复与状态持久化<br/>通知上下文维护]
 ```
 
-`GenerationWorkflow` 领取或恢复任务，`GenerationPreparationService` 加载上下文及角色资源，再并行准备记忆和场景。记忆结果未完整交付时不作为正常材料构建提示词。模型调用使用已冻结提示词；已有候选时可从采用阶段恢复。
+`GenerationWorkflow` 领取或恢复任务，`GenerationPreparationService` 加载上下文及角色资源，再并行准备记忆和场景。记忆结果未完整交付时不作为正常材料构建提示词。模型调用使用已冻结提示词；已有候选时可从采用阶段恢复。回复除了要求完整 JSON，还要求台词说完：落在只能接续下文的词尾（“的”“把”“和”等）时按截断处理，重新生成而不是收下这个候选。
 
 | 环节 | 关键代码 | 存储入口 |
 | --- | --- | --- |

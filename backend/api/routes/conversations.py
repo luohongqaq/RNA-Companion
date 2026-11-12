@@ -4,14 +4,15 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from api.dependencies import get_conversation_service, get_generation_query_service
+from api.dependencies import get_conversation_service, get_generation_query_service, get_session_seal_service
 from api.schemas.generation import GenerationJobListResponse, GenerationJobResponse
 from module.chat.reply.core.processing.query import GenerationQueryService
 from api.schemas.conversation import (
     CreateConversationRequest, ConversationResponse, ConversationPageResponse,
-    UpdateConversationRequest,
+    SealSessionResponse, UpdateConversationRequest,
 )
 from module.chat.conversation.core.processing.conversations import ConversationService
+from module.chat.conversation.core.processing.seal import SessionSealService
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -50,7 +51,8 @@ async def create_conversation(
     response: Response,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
 ) -> ConversationResponse:
-    result = await service.create(character_id=payload.character_id, title=payload.title)
+    result = await service.create(character_id=payload.character_id, title=payload.title,
+                                  with_session=payload.with_session)
     response.headers["Location"] = f"/api/v1/conversations/{result.conversation_id}"
     return ConversationResponse.model_validate(result)
 
@@ -74,3 +76,24 @@ async def update_conversation(
         update_title="title" in payload.model_fields_set, state=payload.state,
     )
     return ConversationResponse.model_validate(result)
+
+@router.post(
+    "/{conversation_id}/sessions/{session_id}/seal", response_model=SealSessionResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def seal_session(
+    conversation_id: str,
+    session_id: str,
+    service: Annotated[SessionSealService, Depends(get_session_seal_service)],
+    response: Response,
+) -> SealSessionResponse:
+    """封存指定会话；摘要已就绪时立即换窗口，仍在生成时返回 202。"""
+    result = await service.seal(conversation_id, session_id)
+    if result.current_session_id is None:
+        response.status_code = status.HTTP_202_ACCEPTED
+    return SealSessionResponse(
+        conversation_id=result.conversation_id,
+        sealed_session_id=result.sealed_session_id,
+        current_session_id=result.current_session_id,
+        pending=result.current_session_id is None,
+    )

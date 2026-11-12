@@ -15,10 +15,11 @@ class CharacterCard:
     character_name: str
     content: str  # 完整内容
     path: Path #角色提示词目录，对应characters.card_path
+    user_appellation: str = ""  # 角色对用户的称呼，来自 characters 表
 
     @property
     def document(self) -> CharacterCardDocument:
-        return CharacterCardDocument(self.character_name, self.content)
+        return CharacterCardDocument(self.character_name, self.content, self.user_appellation)
 
 
 @dataclass(frozen=True, slots=True)

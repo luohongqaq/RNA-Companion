@@ -24,12 +24,14 @@ from module.chat.reply.core.processing.context_loader import ContextLoader
 from module.context_compaction.core.processing.service import ContextCompactionService
 from module.context_compaction.repository.llm import ContextSummaryModelRepository
 from module.context_compaction.core.domain.policy import ContextCompactionPolicy, ContextModelConfig
+from module.context_compaction.core.domain.lifecycle_policy import SessionLifecycleConfig
 from module.chat.reply.core.domain.config.context_budget import ContextPromptBudget
 from module.context_compaction.core.scheduling.worker import ContextWorker
 from module.context_compaction.core.scheduling.workflow import ContextWorkflow
 from module.context_compaction.repository.sqlite import SQLiteContextMaintenanceRepository
 from module.chat.reply.core.processing.preparation import GenerationPreparationService
 from storage.sqlite.db_session import SQLiteDatabase
+from module.chat.conversation.core.processing.seal import SessionSealService
 from module.chat.conversation.repository.sqlite import SQLiteChatRepository
 from module.chat.reply.repository.context_sqlite import SQLiteContextReadRepository
 from storage.config.settings import Settings
@@ -101,6 +103,9 @@ class ApplicationContainer:
     model_settings_service: ModelSettingsService | None = None
     memory_query_service: MemoryQueryService | None = None
     memory_edit_service: MemoryEditService | None = None
+    session_seal_service: SessionSealService | None = None
+    context_lifecycle_policy: SessionLifecycleConfig = field(default_factory=SessionLifecycleConfig)
+    retention_service: MemoryRetentionService | None = None
     memory_edit_index_service: MemoryEditIndexService | None = None
     memory_edit_worker: MemoryEditWorker | None = None
 
@@ -177,6 +182,7 @@ class ApplicationContainer:
                 )
                 await index.initialize()
                 retention = MemoryRetentionService(SQLiteMemoryRetentionRepository(self.database), index)
+                self.retention_service = retention
                 today = BackendTime.local(datetime.now(timezone.utc)).date()
                 await retention.cool_expired_memories(today)
                 await retention.cool_unlinked_objects(today)
@@ -252,7 +258,7 @@ class ApplicationContainer:
                 settings = self.context_settings
                 if self.token_counter is None or settings.default_api_key is None:
                     raise ValueError("上下文维护缺少tokenizer或摘要模型密钥")
-                repository = SQLiteContextMaintenanceRepository(self.database)
+                repository = SQLiteContextMaintenanceRepository(self.database, lifecycle_policy=self.context_lifecycle_policy)
                 service = ContextCompactionService(prompt_budget=ContextPromptBudget(),
                     compaction_policy=ContextCompactionPolicy(), repository=repository,
                     token_counter=self.token_counter,
@@ -365,11 +371,22 @@ def build_container(settings: Settings | None = None) -> ApplicationContainer:
     # 仓储共用存储运行时持有的数据库，启动时统一初始化。
     memory_storage = MemoryStorageRuntime(settings)
     database = memory_storage.database
+    # 窗口额度与交接水位由环境变量控制，用户可按需调大或调小。
+    context_lifecycle = SessionLifecycleConfig(
+        session_target_tokens=settings.context_session_target_tokens,
+        session_prepare_ratio=settings.context_session_prepare_ratio,
+        session_hard_ratio=settings.context_session_hard_ratio,
+    )
     chat_repository = SQLiteChatRepository(database)
+    # 手工封存复用上下文交接流水线；上下文维护未启用时该能力关闭。
+    session_seal_service = (
+        SessionSealService(chat_repository, SQLiteContextMaintenanceRepository(database, lifecycle_policy=context_lifecycle))
+        if context_enabled else None
+    )
     context_loader = ContextLoader(SQLiteContextReadRepository(database))
     encoder_provider = memory_storage.get_encoder if settings.memory_enabled or settings.memory_production_enabled else None
     scene_runtime = SceneRuntime(settings, encoder_provider) if settings.reply_enabled and settings.reply_scene_enabled else None
-    generation_repository = SQLiteGenerationRepository(database)
+    generation_repository = SQLiteGenerationRepository(database, lifecycle_policy=context_lifecycle)
     counter = TokenizerTokenCounter() if settings.generation_enabled or context_enabled or settings.memory_enabled else None
     # 把所有服务装进容器
     container = ApplicationContainer(
@@ -378,6 +395,8 @@ def build_container(settings: Settings | None = None) -> ApplicationContainer:
         message_service=MessageService(chat_repository),
         chat_event_service=ChatEventService(chat_repository),
         conversation_service=ConversationService(chat_repository),
+        session_seal_service=session_seal_service,
+        context_lifecycle_policy=context_lifecycle,
         character_service=CharacterService(SQLiteCharacterRepository(database), FileCharacterRepository(database)),
         model_settings_service=ModelSettingsService(DotenvModelSettingsRepository(database, active_settings=settings)),
         memory_query_service=MemoryQueryService(SQLiteMemoryEditRepository(database)),

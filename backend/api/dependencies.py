@@ -8,6 +8,9 @@ from api.container import ApplicationContainer
 from module.chat.conversation.core.processing.messages import MessageService
 from module.chat.conversation.core.processing.events import ChatEventService
 from module.chat.conversation.core.processing.conversations import ConversationService
+from module.chat.conversation.core.processing.seal import SessionSealService
+from module.memory_management.retention.core.processing.service import MemoryRetentionService
+from module.shared.common.errors.base import InvalidStateError
 from module.character.core.processing.service import CharacterService
 from module.model_settings.core.processing.service import ModelSettingsService
 from module.user_edit.memory_edit.core.processing.edit_service import MemoryEditService
@@ -30,6 +33,21 @@ def get_message_service(request: Request) -> MessageService:
 
 def get_conversation_service(request: Request) -> ConversationService:
     return get_container(request).conversation_service
+
+
+def get_session_seal_service(request: Request) -> SessionSealService:
+    service = get_container(request).session_seal_service
+    if service is None:
+        raise InvalidStateError("上下文维护未启用，无法封存会话")
+    return service
+
+
+def get_retention_service(request: Request) -> MemoryRetentionService:
+    """维护接口用：按给定日期执行一次降池，供回放等离线流程推进虚拟时间。"""
+    service = get_container(request).retention_service
+    if service is None:
+        raise InvalidStateError("记忆未启用，无法执行降池")
+    return service
 
 
 def get_character_service(request: Request) -> CharacterService:

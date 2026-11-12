@@ -71,7 +71,8 @@ class FileReplyPromptResourceReader:
             raise PromptResourceError(f"无法读取角色提示词: {directory}") from exc
         version = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
         return ReplyPromptResources(
-            character_card=CharacterCard(character.character_id, character.name, texts["character_card"], directory),
+            character_card=CharacterCard(character.character_id, character.name, texts["character_card"], directory,
+                                         character.user_appellation),
             character_card_version=hashes["character_card"], system_prompt=texts["system_prompt"],
             output_requirements="", template_version=version,
             tone_prompt=texts["tone_prompt"], tone_prompt_version=hashes["tone_prompt"],

@@ -29,3 +29,5 @@ frontend/release/
 
 # 文档截图用的示例数据（scripts/seed_preview_data.py 生成）
 .preview-data/
+
+# 本地回放产物，不进版本库（脚本与说明见 backend/scripts/replay-guide.md）

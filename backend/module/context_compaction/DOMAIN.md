@@ -58,6 +58,7 @@ flowchart LR
 
 | 数据 | 功能与位置 |
 | --- | --- |
+| [SummaryModelInput](core/domain/source.py) | 传给摘要模型的固定输入：拥有的完整轮、继承材料、允许引用与预算；每条消息额外带 `local_date`（后端当地日期），约定日期按它判断，不用 `created_at` 的 UTC 日期。 |
 | [StructuredSummary](../shared/context/types/summary.py) | 保存摘要主线、约定、当前话题、指代、用户情绪、未解决问题、最近话题、场景和关键词等内容，并提供解析、渲染与校验。来源引用由 [ContextSourceRef](../shared/context/types/references.py) 表达。 |
 | [SummaryVersions](../shared/context/types/summary.py) | 标识摘要协议、提示词、模型和 tokenizer 版本。 |
 | [SummaryCandidate](core/domain/candidate.py) | 通过 `from_summary()` 将结构化摘要、来源清单和版本信息构造成候选，同时生成正文、计算 token 数和内容哈希。 |
@@ -80,5 +81,7 @@ flowchart LR
 | --- | --- |
 | [SnapshotRef、InheritedContextRef、ContextSourceRef](../shared/context/types/references.py) | 分别标识摘要版本、后继固定继承材料及原文修订来源；继承引用记录前驱、摘要和原文范围。 |
 | [TurnRange](../shared/context/types/turns.py) | 表示某个 session 中连续轮次的范围；实际正文由读取方按引用加载。 |
-| [HandoffPacket、HandoffMode](core/domain/handoff.py) | 描述交接材料及覆盖边界的领域契约；当前自动交接以 READY 快照和连续尾部构造 `InheritedContextRef`，不能仅根据该类型推断 fallback 已接入自动交接。 |
+| [HandoffPacket、HandoffMode](core/domain/handoff.py) | 描述交接材料及覆盖边界的领域契约；正常交接以 READY 快照和连续尾部构造 `InheritedContextRef`，降级交接只写连续尾部。 |
 | [ContextMaintenanceRepository、ContextSummaryModelPort](core/domain/ports.py) | 描述业务所需的任务、来源、快照、交接及模型能力；实现位于 repository。 |
+
+摘要重试后仍失败时走降级交接：不写 `SnapshotRef`，只继承冻结点之后的 `TurnRange`，`InheritedContextRef.summary_snapshot_ref` 为空。读取方按无摘要继承处理，会话不会因为摘要失败停在等待交接。

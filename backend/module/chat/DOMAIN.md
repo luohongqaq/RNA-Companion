@@ -32,6 +32,7 @@ flowchart LR
 | [SaveMessageInput、SaveMessageResult](conversation/core/domain/contracts.py) | 用户提交的消息及持久化回执；回执代表消息保存结果，不代表回复已生成。 |
 | [ConversationDetails、ConversationMessageItem](conversation/core/domain/contracts.py) | 会话详情和消息列表的读取视图。 |
 | [ChatEvent 及子类](conversation/core/domain/events.py) | 表达正式回复提交、生成失败或取消等聊天事件。 |
+| [SealSession、SealSessionResult](conversation/core/domain/contracts.py) | 手动封存一段会话的输入与结果；结果带接替它的后继会话，等待超时时为空。 |
 
 ## Reply：任务、固定材料与结果
 
@@ -69,7 +70,8 @@ flowchart LR
 
 | 类型与位置 | 作用 |
 | --- | --- |
-| [ConversationRepository、ChatRepository](conversation/core/domain/ports.py) | 定义会话、消息、回执和事件的读写能力。 |
+| [ConversationRepository、ChatRepository](conversation/core/domain/ports.py) | 定义会话、消息、回执和事件的读写能力，以及封存所需的核对、置等待与回滚。 |
+| [ContextHandoffPort](conversation/core/domain/ports.py) | 定义封存所需的交接能力：登记摘要、读取任务状态、提交正常交接、提交降级交接。 |
 | [GenerationRepository、ReplyModelPort、TokenCounter](reply/core/domain/ports.py) | 定义生成任务持久化、模型调用和消息 token 计数能力。 |
 | [ContextReadRepository](reply/core/domain/context_ports.py) | 按固定引用读取摘要、完整轮和当前用户消息。 |
 | [ContextPromptBudget](reply/core/domain/config/context_budget.py) | 定义角色卡、记忆、场景、当前输入和完整提示词的容量约束。 |

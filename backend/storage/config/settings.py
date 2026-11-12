@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     generation_poll_seconds: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     context_enabled: bool | None = None #未指定时跟随自动回复开关，可单独启停上下文维护
     context_poll_seconds: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    # 窗口额度与交接水位：额度越小换窗口越勤，人设越稳但摘要调用越多
+    context_session_target_tokens: int = Field(default=3000, gt=0)
+    context_session_prepare_ratio: float = Field(default=0.80, gt=0, le=1, allow_inf_nan=False)
+    context_session_hard_ratio: float = Field(default=0.95, gt=0, le=1, allow_inf_nan=False)
     # 统一使用项目内的 DeepSeek tokenizer；独立于回复模型的供应商。
     reply_tokenizer_path: Path | None = (
         Path(__file__).resolve().parents[2] / "resources" / "deepseek_v4_tokenizer"

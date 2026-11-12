@@ -27,6 +27,7 @@ flowchart LR
 | 对话触发 | [chat/reply/repository/sqlite.py](../chat/reply/repository/sqlite.py) 的 `_advance_session_handoff` | 完整轮后计算用量、登记任务，必要时标记等待并尝试交接。 |
 | 业务入口 | [ContextCompactionService](core/processing/service.py) | 规划来源、生成、程序校验和发布。 |
 | 调度与事务 | [ContextWorker](core/scheduling/worker.py)、[ContextWorkflow](core/scheduling/workflow.py)、[SQLite 仓储](repository/sqlite.py) | 任务推进、恢复与重试；快照和交接事务。 |
+| 手动封存 | [chat SessionSealService](../chat/conversation/core/processing/seal.py) | 用户主动封存时登记任务、置等待，并按状态提交正常或降级交接。 |
 
 ## 分层与依赖
 
@@ -56,7 +57,7 @@ flowchart TD
     W --> R[发布 READY 后再次尝试交接]
 ```
 
-默认窗口额度 3000 token；用量为当前 session 原文加固定继承摘要及尾部的实际占用。重复登记沿用首次冻结上界。决策不拆完整轮，阈值和配置见 [SessionLifecycleConfig](core/domain/lifecycle_policy.py)；调用发生在 [回复仓储](../chat/reply/repository/sqlite.py) 的 `_advance_session_handoff`。
+默认窗口额度 3000 token（可用 `RNA_CONTEXT_SESSION_TARGET_TOKENS`、`RNA_CONTEXT_SESSION_PREPARE_RATIO`、`RNA_CONTEXT_SESSION_HARD_RATIO` 调整）；用量为当前 session 原文加固定继承摘要及尾部的实际占用。重复登记沿用首次冻结上界。决策不拆完整轮，阈值和配置见 [SessionLifecycleConfig](core/domain/lifecycle_policy.py)；调用发生在 [回复仓储](../chat/reply/repository/sqlite.py) 的 `_advance_session_handoff`。
 
 ## 后台生成、校验与发布
 
@@ -74,7 +75,7 @@ flowchart TD
     I --> J[快照和任务 READY<br/>尝试交接]
 ```
 
-规划覆盖当前 session 从第 1 轮到冻结上界的完整前缀，并使用入场时固定的继承引用；冻结之后新增的原文由交接时接续。生成目标默认 800 token，完整渲染并包装后的摘要必须非空且严格小于 1000 token。程序校验不调用审核模型，也不能证明语义准确。
+规划覆盖当前 session 从第 1 轮到冻结上界的完整前缀，并使用入场时固定的继承引用；冻结之后新增的原文由交接时接续。生成目标默认 800 token，完整渲染并包装后的摘要必须非空且严格小于 1000 token；这两个数由模型输入里的 summary_target_tokens / summary_token_limit 给出，提示词不再写死。程序校验不调用审核模型，也不能证明语义准确。
 
 | 环节 | 关键代码 | 主要仓储方法 |
 | --- | --- | --- |
@@ -106,6 +107,8 @@ flowchart TD
     H --> I[更新当前 session 指针<br/>快照 VALID，任务 DONE]
 ```
 
+手动封存走同一套事务，区别是封存接口会同步等后继会话（轮询 0.5 秒、最长 180 秒）。摘要重试后仍失败时，[commit_degraded_handoff](repository/sqlite.py) 放弃摘要，只把冻结上界之后的连续原文带给后继会话——要求冻结点之后确有原文、且尾部能放进新窗口，否则返回 None 交给调用方回滚。
+
 实现见 [commit_handoff_in_transaction](repository/sqlite.py)。达到等待阈值时以及后台发布 READY 快照时都会尝试交接；事务重新核对来源、完整轮和容量，保存固定摘要引用与连续原文范围，不复制尾部消息。旧 session 封存、后继创建、conversation 指针更新及状态变更在同一事务内完成；唯一约束保证重复交接返回同一后继。READY 表示摘要已发布，DONE 表示交接已被采用；条件不满足时不切换，也不截断尾部。
 
 ## 失败与恢复
@@ -120,6 +123,8 @@ flowchart LR
     G[Worker 启动] --> H[恢复遗留 GENERATING / VALIDATING]
     H --> I[推进执行代次<br/>保留可复用候选]
 ```
+
+摘要任务判定 FAILED 时，等待中的封存会先尝试降级交接，避免会话停在 WAITING_HANDOFF；降级也交不出东西才回滚到可聊天。
 
 [ContextWorkflow](core/scheduling/workflow.py) 分类错误；[SQLite 仓储](repository/sqlite.py) 的 `retry_job`、`fail_job`、`recover_unfinished_attempts` 核对状态和执行代次，防止迟到结果覆盖新进度。校验和发布阶段的可用候选可复用；启动恢复不是一次新的模型生成。
 

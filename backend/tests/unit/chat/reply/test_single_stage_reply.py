@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from pathlib import Path
 import pytest
 from module.shared.context.types.visual import Expression, Pose, VisualState
-from module.chat.reply.core.domain.errors.reply import ReplyOutputError
+from module.chat.reply.core.domain.errors.reply import ReplyOutputError, ReplyTruncatedError
 from module.shared.character.types.manifest import CharacterResourceManifest, VisualOptions
 from module.shared.character.card_render import CharacterCardRenderer
 from module.chat.reply.core.processing.prompt_builder import PromptBuilder
@@ -177,6 +177,33 @@ async def test_reply_uses_frozen_character_visual_options(prompt):
     assert result.candidate.reply.visual.names() == {"pose_name": "挥手", "expression_name": "惊喜"}
     with pytest.raises(ReplyOutputError):
         await service.generate(prompt, expected_prompt_hash=expected_hash)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [
+    "嗯……我大概懂那种别扭。喜欢的角色是",
+    "原来是这样……那这个愿望，我记下了。不过主人，能把",
+    "哦——RAG算是上岸啦！从被调参折磨成那样到",
+])
+async def test_reply_stopping_mid_sentence_is_truncated(prompt, text):
+    """完整JSON也可能停在半句；这种候选不能当作说完的话保存。"""
+    client = ScriptedClient([(draft(text=text), "stop")])
+    with pytest.raises(ReplyTruncatedError):
+        await GenerationReplyService(ReplyModelRepository(client)).generate(
+            prompt, expected_prompt_hash=ReplyFingerprint.prompt_hash(prompt.messages))
+    assert len(client.calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [
+    "嗯，今晚早点睡吧～", "就这样定啦。", "……你认真的？", "好呀", "我知道了，那明天见！", "行，那就这样……",
+])
+async def test_reply_ending_naturally_is_not_truncated(prompt, text):
+    """句末没有标点但语义说完的短回复不能误判。"""
+    client = ScriptedClient([(draft(text=text), "stop")])
+    result = await GenerationReplyService(ReplyModelRepository(client)).generate(
+        prompt, expected_prompt_hash=ReplyFingerprint.prompt_hash(prompt.messages))
+    assert result.candidate.reply.response_zh == text
 
 
 def test_all_authored_fixed_example_visuals_pass_validation():

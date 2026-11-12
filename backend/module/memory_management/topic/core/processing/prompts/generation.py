@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-PROMPT_VERSION = "topic-generation-v5-changes"
+PROMPT_VERSION = "topic-generation-v6-merge-stages"
 
 
 GENERATION_PROMPT = """你是长期记忆系统的 topic 整合员：判断具体事件主题的归属，起草已有 topic 的更新申请或新 topic 的建档申请。
@@ -53,7 +53,7 @@ merge_evidence、revise_event、correct_event 的目标都必须是输入中已�
 
 1. entries 同时容纳事实与计划：kind=event 使用 occurrence_time；kind=plan 使用 target_time，不把打算写成已经发生。actor 区分 user、assistant、other。
 2. acquire_time 表示获知日期，occurrence_time 表示实际发生日期，target_time 表示计划目标日期；沿用输入的日期和不确定性，未知保留 null，不用获知日期自动补发生日期。
-3. 按 acquire_time（获知日期）组织条目。同一获知日、相同 actor 和 kind 的相关进展可以合并；不同获知日、不同主体或事实与计划分开记录。合并时 occurrence_time 或 target_time 必须兼容，不为合并而丢掉明确日期；更正条目单独记录。当天已执行的打算可并入已发生事实，仍指向未来的打算保留为计划。后来的完成状态不能倒改早先计划的确定程度。
+3. 按 acquire_time（获知日期）组织条目。同一 session、同一获知日的同一阶段应合并为一条，按事项进展分条，不按消息或感受分条；不同获知日、不同主体、事实与计划才分开记录。合并时 occurrence_time 或 target_time 必须兼容，不为合并而丢掉明确日期，也不抹平否定和确定程度；更正条目单独记录。当天已执行的打算可并入已发生事实，仍指向未来的打算保留为计划。后来的完成状态不能倒改早先计划的确定程度。
 4. statement 概括该条事实或进展，不复述问答过程。保留否定、限定、用户自评和更正，不将助手推测、建议、问题或玩笑写成用户确认的事实。
 5. current_state 仅总结截至最后一份有效证据的最新已知状态，并引用支持它的 entry_id；后补旧事不覆盖更晚结果，被明确更正的旧说法不继续当作现状。
 6. 新增条目的来源必须来自本申请采用的 object；修订旧条目或修改主题说明时，至少附本申请采用的 object 的来源，可同时保留该目标的已有来源。不能从其他 topic 借用证据。

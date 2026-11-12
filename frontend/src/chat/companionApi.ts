@@ -17,6 +17,7 @@ export interface Character { character_id: string; name: string }
 export interface Conversation {
   conversation_id: string; character_id: string; title: string | null
   state: 'active' | 'archived'; updated_at: string
+  current_session_id: string | null
 }
 export interface Message {
   message_id: string; content: string; role: 'user' | 'character'; created_at: string

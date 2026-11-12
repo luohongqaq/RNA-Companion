@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from module.chat.conversation.core.domain.contracts import AcceptedReply, RequestReceiptResult, SaveMessageInput, SaveMessageResult
 from module.chat.conversation.core.domain.contracts import (
     ConversationDetails, ConversationMessageItem, CreateConversation, MessageCursor, UpdateConversation,
+    SealSession, SealSessionResult,
 )
 from module.chat.conversation.core.domain.events import ChatEvent
 from module.shared.context.types.messages import MessageRole
@@ -70,8 +71,84 @@ class SQLiteChatRepository:
             )
             session.add(row)
             await session.flush()
+            if command.with_session:
+                # 归档后新建的对话要立刻带回一个可用的空窗口。
+                first = Session.open(IdGenerator.new("session"), command.conversation_id, now)
+                session.add(conversation_mappers.session_to_row(first))
+                await session.flush()
+                row.current_session_id = first.session_id
+                await session.flush()
             result = conversation_mappers.conversation_to_details(row)
         return result
+
+    async def seal_target(self, conversation_id: str, session_id: str) -> int:
+        """核对可封存并返回最后一轮序号；只读，不迁移任何状态。"""
+        async with self._database.db_session() as session:
+            conversation = await session.get(ConversationRow, conversation_id)
+            if conversation is None:
+                raise NotFoundError("会话不存在")
+            if conversation.state != ConversationState.ACTIVE.value:
+                raise InvalidStateError("仅进行中的对话可以封存")
+            if conversation.current_session_id != session_id:
+                raise InvalidStateError("这段对话已经换到新的会话，请刷新后重试")
+            current = await session.get(SessionRow, session_id)
+            if current is None:
+                raise NotFoundError("当前会话不存在")
+            if current.session_state == SessionState.SEALED.value:
+                raise InvalidStateError("当前会话已经封存")
+            turn_count = await session.scalar(select(func.count()).select_from(TurnRow).where(
+                TurnRow.session_id == session_id,
+            ))
+            if not turn_count:
+                raise InvalidStateError("这段对话还没有内容")
+            unfinished = await session.scalar(select(TurnRow.turn_id).where(
+                TurnRow.session_id == session_id,
+                TurnRow.turn_state != TurnState.COMPLETE.value,
+            ).limit(1))
+            if unfinished is not None:
+                raise InvalidStateError("这里还有未完成的回复，稍后再封存")
+            last_seq = await session.scalar(select(func.max(TurnRow.turn_seq)).where(
+                TurnRow.session_id == session_id,
+            ))
+            return int(last_seq or 0)
+
+    async def mark_waiting_handoff(self, conversation_id: str, session_id: str) -> None:
+        """把当前会话置为等待交接；交接由上下文流水线接手，本方法不再改别的状态。"""
+        async with self._database.transaction() as session:
+            conversation = await session.get(ConversationRow, conversation_id)
+            if conversation is None:
+                raise NotFoundError("会话不存在")
+            if conversation.current_session_id != session_id:
+                raise InvalidStateError("这段对话已经换到新的会话，请刷新后重试")
+            current = await session.get(SessionRow, session_id)
+            if current is None:
+                raise NotFoundError("当前会话不存在")
+            if current.session_state == SessionState.WAITING_HANDOFF.value:
+                return
+            if current.session_state != SessionState.OPEN.value:
+                raise InvalidStateError("当前会话已经封存")
+            current.session_state = SessionState.WAITING_HANDOFF.value
+            conversation.updated_at = datetime.now(timezone.utc)
+            await session.flush()
+
+    async def release_handoff(self, conversation_id: str, session_id: str) -> None:
+        """摘要失败时把会话退回可对话状态；只在仍是当前会话且等待交接时生效。"""
+        async with self._database.transaction() as session:
+            conversation = await session.get(ConversationRow, conversation_id)
+            if conversation is None or conversation.current_session_id != session_id:
+                return
+            current = await session.get(SessionRow, session_id)
+            if current is None or current.session_state != SessionState.WAITING_HANDOFF.value:
+                return
+            current.session_state = SessionState.OPEN.value
+            conversation.updated_at = datetime.now(timezone.utc)
+            await session.flush()
+
+    async def get_current_session_id(self, conversation_id: str) -> str | None:
+        """读取对话当前会话；等待交接时用来判断是否已经换新。"""
+        async with self._database.db_session() as session:
+            row = await session.get(ConversationRow, conversation_id)
+            return None if row is None else row.current_session_id
 
     async def get_conversation(self, conversation_id: str) -> ConversationDetails | None:
         """获取指定角色的 conversation"""

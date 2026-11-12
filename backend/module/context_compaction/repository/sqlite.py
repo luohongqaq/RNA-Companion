@@ -78,6 +78,47 @@ class SQLiteContextMaintenanceRepository:
             await self._validate_source_prefix(session, command)
             return await self._register_new_job(session, command)
 
+    async def prepare_handoff(self, session_id: str, through_turn_seq: int) -> str:
+        """登记交接摘要任务；沿用同一边界原任务，上次失败的任务重新排入待生成。"""
+        async with self._database.transaction() as session:
+            existing = await session.scalar(select(ContextJobRow).where(
+                ContextJobRow.dedupe_key == f"prepare_handoff:{session_id}",
+            ))
+            if existing is not None:
+                if existing.status == ContextJobStatus.FAILED.value:
+                    await self._revive_handoff(session, existing)
+                return existing.job_id
+        command = CreateContextJobCommand(
+            job_type=ContextJobType.PREPARE_HANDOFF,
+            session_id=session_id,
+            frozen_through_turn_seq=through_turn_seq,
+            priority=10,
+            dedupe_key=f"prepare_handoff:{session_id}",
+        )
+        try:
+            return await self.create_job(command)
+        except IdempotencyConflictError:
+            return ""
+
+    async def handoff_status(self, session_id: str) -> str | None:
+        """读取交接任务状态；没有登记时返回 None。"""
+        async with self._database.db_session() as session:
+            return await session.scalar(select(ContextJobRow.status).where(
+                ContextJobRow.dedupe_key == f"prepare_handoff:{session_id}",
+            ))
+
+    @staticmethod
+    async def _revive_handoff(session: AsyncSession, row: ContextJobRow) -> None:
+        """失败任务重新排入待生成；重试次数清零，执行代次前移让旧结果失效。"""
+        job = context_mappers.context_job_to_domain(row)
+        now = datetime.now(timezone.utc)
+        job = replace(job, status=ContextJobStatus.NEED_GENERATE, retry_count=0, last_error=None,
+                      available_at=now, updated_at=now, finished_at=None,
+                      attempt_version=job.attempt_version + 1)
+        row.payload_json = context_mappers.context_job_payload_to_json(job)
+        row.status, row.updated_at = job.status.value, now
+        await session.flush()
+
     async def create_job_in_transaction(self, session: AsyncSession, command: CreateContextJobCommand) -> str:
         """嵌入调用方事务的登记核心；dedupe命中返回原任务，不追新上界。
 
@@ -599,6 +640,81 @@ class SQLiteContextMaintenanceRepository:
         """独立事务交接入口；重复提交返回同一个后继，边界不满足时返回None。"""
         async with self._database.transaction() as session:
             return await self.commit_handoff_in_transaction(session, session_id)
+
+    @stage("context.handoff_degraded")
+    async def commit_degraded_handoff(self, session_id: str) -> Session | None:
+        """摘要反复失败时的兜底交接：不要摘要，只把冻结点之后的原文交给后继会话。"""
+        async with self._database.transaction() as session:
+            return await self.commit_handoff_degraded_in_transaction(session, session_id)
+
+    async def commit_handoff_degraded_in_transaction(
+        self, session: AsyncSession, session_id: str,
+    ) -> Session | None:
+        """兜底路径：交接摘要始终不合格时，宁可丢掉摘要也要让窗口换掉。
+
+        冻结点（生成摘要时定格的轮数）之前的原文不再携带，冻结点之后的完整轮作为
+        继承原文交给新会话；新会话没有摘要，人设与长期记忆仍按角色维度生效。
+        """
+        successor = await session.scalar(select(SessionRow).where(
+            SessionRow.auto_successor_of == session_id,
+        ))
+        if successor is not None:
+            return conversation_mappers.session_to_domain(successor)
+        old = await session.get(SessionRow, session_id)
+        if old is None:
+            raise NotFoundError("待交接session不存在")
+        conversation = await session.get(ConversationRow, old.conversation_id)
+        if (old.session_state != SessionState.WAITING_HANDOFF.value or conversation is None
+                or conversation.state != ConversationState.ACTIVE.value
+                or conversation.current_session_id != old.session_id):
+            return None
+        last_seq = await session.scalar(select(func.max(TurnRow.turn_seq)).where(
+            TurnRow.session_id == old.session_id)) or 0
+        unfinished = await session.scalar(select(TurnRow.turn_id).where(
+            TurnRow.session_id == old.session_id, TurnRow.turn_state != TurnState.COMPLETE.value,
+        ).limit(1))
+        if unfinished is not None:
+            return None
+        job_row = await session.scalar(select(ContextJobRow).where(
+            ContextJobRow.dedupe_key == f"prepare_handoff:{session_id}",
+        ))
+        if job_row is None:
+            return None
+        job = context_mappers.context_job_to_domain(job_row)
+        frozen = job.frozen_through_turn_seq
+        if frozen <= 0 or frozen >= last_seq:
+            # 冻结点之后没有可带的原文（用户没有继续聊），兜底也交不出东西。
+            return None
+        tail = TurnRange(old.session_id, frozen + 1, last_seq)
+        _, tail_payload, _ = await self._read_manifest_turns(session, tail)
+        tail_tokens = await session.scalar(select(func.sum(TurnRow.turn_token_count)).where(
+            TurnRow.session_id == old.session_id, TurnRow.turn_seq.between(frozen + 1, last_seq),
+        )) or 0
+        # 与正常交接同样的容量约束：尾部必须放得进新窗口。
+        if tail_tokens >= self._lifecycle_policy.session_target_tokens:
+            return None
+        encoded = json.dumps({"snapshot": None, "tail": tail_payload},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        inherited = InheritedContextRef(old.session_id, None, tail,
+            hashlib.sha256(encoded.encode("utf-8")).hexdigest())
+        now = datetime.now(timezone.utc)
+        old.session_state, old.session_end_time = SessionState.SEALED.value, now
+        await session.flush()
+        new_session = Session(
+            session_id=IdGenerator.new("session"), conversation_id=old.conversation_id,
+            state=SessionState.OPEN, progress_tokens=0, started_at=now,
+            predecessor_session_id=old.session_id, inherited_context=inherited,
+            session_seq=(await session.scalar(select(func.max(SessionRow.session_seq)).where(
+                SessionRow.conversation_id == old.conversation_id))) + 1,
+        )
+        session.add(conversation_mappers.session_to_row(new_session, auto_successor_of=old.session_id))
+        await session.flush()
+        conversation.current_session_id, conversation.updated_at = new_session.session_id, now
+        job = replace(job, status=ContextJobStatus.DONE, updated_at=now, finished_at=now)
+        job_row.status, job_row.updated_at = job.status.value, now
+        job_row.payload_json = context_mappers.context_job_payload_to_json(job)
+        await session.flush()
+        return new_session
 
     async def commit_handoff_in_transaction(
         self, session: AsyncSession, session_id: str,

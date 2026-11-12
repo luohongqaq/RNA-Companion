@@ -21,7 +21,7 @@ class ConversationService:
 
     @stage("conversation.create")
     async def create(
-        self, *, character_id: str, title: str | None = None,
+        self, *, character_id: str, title: str | None = None, with_session: bool = False,
     ) -> ConversationDetails:
         """创建一个新会话。"""
         character_id = character_id.strip()
@@ -31,7 +31,7 @@ class ConversationService:
         if title is not None and not 1 <= len(title) <= 200:
             raise InvalidStateError("标题必须为 1～200 个字符")
         return await self._repository.create_conversation(
-            CreateConversation(IdGenerator.new("conv"), character_id, title)
+            CreateConversation(IdGenerator.new("conv"), character_id, title, with_session)
         )
 
     async def get(self, conversation_id: str) -> ConversationDetails:
@@ -120,4 +120,3 @@ class ConversationService:
 
     async def update_title(self, conversation_id: str, title: str) -> ConversationDetails:
         return await self.update(conversation_id, title=title, update_title=True)
-

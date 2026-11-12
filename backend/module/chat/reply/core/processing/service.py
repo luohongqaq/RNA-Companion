@@ -18,6 +18,12 @@ from module.chat.reply.core.domain.materials import (
 )
 
 
+# 模型偶发在句中停笔：finish_reason为stop、JSON也完整，但台词没说完。
+# 这些词只能接续下文，落在一句结尾就是没写完。
+_UNFINISHED_TAIL = ("是", "把", "到", "的", "和", "跟", "在", "就", "还", "又", "而", "但", "或",
+                    "被", "让", "给", "比", "像", "为", "从", "向", "对", "与", "且", "并")
+
+
 class GenerationReplyService:
     @staticmethod
     def validate_reply_visual(reply: CharacterReply, options: VisualOptions | None = None) -> None:
@@ -63,6 +69,7 @@ class GenerationReplyService:
         ensure_current()
         self._require_finished(response)
         reply = self.parse_character_reply(self._unwrap_json(response.content), self._visual_resolver)
+        self._require_sentence_finished(reply)
         self.validate_reply_visual(reply, prompt.visual_options)
         trace = {
             "schema": "single-stage-scene-reply-v1",
@@ -85,6 +92,13 @@ class GenerationReplyService:
             raise ReplyTruncatedError("回复达到输出上限，不能作为完整候选")
         if response.finish_reason != "stop":
             raise ReplyOutputError("模型未完整结束回复")
+
+    @staticmethod
+    def _require_sentence_finished(reply: CharacterReply) -> None:
+        """拦住停在半句的台词；完整JSON不代表说完了一句话。"""
+        text = reply.response_zh.strip()
+        if text.endswith(_UNFINISHED_TAIL):
+            raise ReplyTruncatedError("回复停在半句，不能作为完整候选")
 
     @staticmethod
     def _unwrap_json(content: str) -> str:

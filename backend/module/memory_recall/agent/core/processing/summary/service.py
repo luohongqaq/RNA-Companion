@@ -22,6 +22,8 @@ class MemorySummaryService:
         if not selection.get("selected"):
             return {"status": "skipped", "summary": "", "seconds": 0.0}
         started = perf_counter()
+        appellation = (character_context or {}).get("user_appellation") or "你"
+        prompt = self._prompt.replace("{{ user_name }}", appellation)
         payload = MemorySummaryInput.build(selection, user_input, chat_context, character_context)
         payload["remaining_seconds"] = max(0.0, target_deadline_at - perf_counter())
         payload["time_guidance"] = "剩余秒数是软目标，请尽快提交完整总结；目标归零不表示取消或总结失败。"
@@ -32,7 +34,7 @@ class MemorySummaryService:
                 raise TimeoutError()
             response = await asyncio.wait_for(self._gateway.complete(MemoryModelRequest(
                 model=self._model,
-                messages=[{"role": "system", "content": self._prompt},
+                messages=[{"role": "system", "content": prompt},
                           {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}],
                 timeout_seconds=remaining, thinking_enabled=False,
                 max_output_tokens=max_output_tokens,

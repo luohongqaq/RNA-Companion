@@ -45,6 +45,9 @@ const startupPetals: Record<string, string>[] = [
   { '--x': '93%', '--s': '18px', '--t': '15s', '--d': '-2s' },
 ]
 const error = ref('')
+const notice = ref('')
+const sealing = ref('')
+const archiving = ref('')
 const list = ref<Conversation[]>([])
 const listCursor = ref<string | null>(null)
 const filter = ref<Conversation['state']>('active')
@@ -301,10 +304,12 @@ async function selectCharacter(item: Character, notify = true) {
   } catch (cause) { report(cause) }
 }
 let creation: Promise<Conversation> | undefined
-function create() {
+function create(withSession = false) {
   if (!creation) {
     creating.value = true
-    creation = api<Conversation>('/conversations', 'POST', { character_id: character.value.character_id })
+    creation = api<Conversation>('/conversations', 'POST', {
+      character_id: character.value.character_id, with_session: withSession,
+    })
       .then(item => {
         filter.value = 'active'
         list.value = [item, ...list.value.filter(entry => entry.conversation_id !== item.conversation_id && entry.state === 'active')]
@@ -326,6 +331,42 @@ async function changeState(item: Conversation) {
   await loadList()
   broadcast('companion:conversation-updated', { characterId: changed.character_id, conversationId: changed.conversation_id })
 }
+async function seal(item: Conversation) {
+  const session = item.current_session_id
+  if (!session || sealing.value) return
+  sealing.value = session
+  notice.value = ''
+  try {
+    const result = await api<{ current_session_id: string | null; pending: boolean }>(
+      conversationPath(item.conversation_id) + '/sessions/' + encodeURIComponent(session) + '/seal', 'POST')
+    await loadList()
+    notice.value = result.pending
+      ? '这一段已经封存，摘要还在生成，稍后会自动换到新的一段。'
+      : '已封存，记忆已落库；新的一段已经开好。'
+    const refreshed = list.value.find(entry => entry.conversation_id === item.conversation_id)
+    if (selected.value?.conversation_id === item.conversation_id && refreshed) selected.value = refreshed
+    broadcast('companion:conversation-updated', { characterId: item.character_id, conversationId: item.conversation_id })
+  } finally { sealing.value = '' }
+}
+function requestArchive(item: Conversation) {
+  const isCurrent = selected.value?.conversation_id === item.conversation_id
+  if (!isCurrent || !item.current_session_id) { void archive(item, false).catch(report); return }
+  notice.value = ''
+  archiving.value = item.conversation_id
+}
+async function archive(item: Conversation, sealFirst: boolean) {
+  archiving.value = ''
+  if (sealFirst && item.current_session_id) await seal(item)
+  await changeState(item)
+  if (selected.value?.conversation_id !== item.conversation_id) return
+  // 归档当前这段对话：界面清空，另开一条全新对话（带空会话）。
+  selected.value = undefined
+  reading.value = undefined
+  messages.value = []
+  jobs.value = []
+  draft.value = ''
+  await create(true)
+}
 async function rename(item: Conversation) {
   const title = newTitle.value
 
@@ -337,7 +378,7 @@ async function rename(item: Conversation) {
 }
 async function send() {
   const content = draft.value.trim()
-  if (!content || selected.value?.state === 'archived') return
+  if (!content || sealing.value || selected.value?.state === 'archived') return
   draft.value = ''
   const previous = selected.value
   let item: Conversation
@@ -672,7 +713,7 @@ onUnmounted(() => {
             </div>
             <form v-if="selected?.state !== 'archived'" class="scene-input" :class="{ 'has-draft': draft.trim() }" @submit.prevent="send">
               <span class="composer-label" aria-hidden="true">你</span>
-              <textarea v-model="draft" aria-label="消息" rows="1" maxlength="100000" placeholder="输入消息" @keydown.enter="onEnter" />
+              <textarea v-model="draft" aria-label="消息" rows="1" maxlength="100000" :disabled="!!sealing" :placeholder="sealing ? '正在整理这一段，稍候…' : '输入消息'" @keydown.enter="onEnter" />
               <small class="composer-hint">Enter 发送 · Shift + Enter 换行</small>
               <button class="primary" :disabled="!draft.trim() || !online" aria-label="发送消息"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4l18 8-18 8 4-8-4-8Zm4 8h14"/></svg><span>发送</span></button>
             </form>
@@ -691,6 +732,7 @@ onUnmounted(() => {
                 <button v-for="state in (['active', 'archived'] as const)" :key="state" :aria-pressed="filter === state" @click="filter = state; list = []; listCursor = null; loadList().catch(report)">{{ state === 'active' ? '进行中' : '已归档' }}</button>
                 <input v-model="search" aria-label="筛选已加载的对话" placeholder="筛选已加载的对话…">
               </div>
+              <p v-if="notice" class="journal-note">{{ notice }}</p>
               <div class="history-entries">
                 <p v-if="!visible.length" class="journal-note">{{ search.trim() ? '没有匹配的对话。' : '这里还没有对话。' }}</p>
                 <ol v-else class="history-list">
@@ -704,7 +746,15 @@ onUnmounted(() => {
                       <button v-if="item.state === 'active'" @click="open(item)">继续聊天</button>
                       <button v-else @click="reading = item">查看历史</button>
                       <button v-if="renaming !== item.conversation_id" @click="renaming = item.conversation_id; newTitle = item.title ?? ''">改名</button>
-                      <button @click="changeState(item).catch(report)">{{ item.state === 'active' ? '归档' : '恢复' }}</button>
+                      <button v-if="item.state === 'active' && item.current_session_id" :disabled="sealing === item.current_session_id" title="封存这一段对话，交给记忆生产线整理，并开启新的一段" @click="seal(item).catch(report)">{{ sealing === item.current_session_id ? '封存中…' : '封存' }}</button>
+                      <button v-if="item.state === 'active'" @click="requestArchive(item)">归档</button>
+                      <button v-else @click="changeState(item).catch(report)">恢复</button>
+                    </div>
+                    <div v-if="archiving === item.conversation_id" class="history-rename">
+                      <span>归档后不再显示；未封存的内容不会进入记忆。</span>
+                      <button @click="archive(item, true).catch(report)">先封存再归档</button>
+                      <button @click="archive(item, false).catch(report)">直接归档</button>
+                      <button type="button" @click="archiving = ''">取消</button>
                     </div>
                     <form v-if="renaming === item.conversation_id" class="history-rename" @submit.prevent="rename(item).then(() => renaming = '').catch(report)"><input v-model="newTitle" aria-label="对话标题" maxlength="200"><button>保存</button><button type="button" @click="renaming = ''">取消</button></form>
                   </li>

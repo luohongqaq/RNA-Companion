@@ -12,7 +12,7 @@ class ContextModelConfig:
     """摘要生成客户端的请求配置。"""
     model_name: str = "deepseek-chat"
     timeout_seconds: float = 120.0
-    max_output_tokens: int = 6000  # 包含思考及结构化来源元数据，不等于最终摘要额度
+    max_output_tokens: int = 12000  # 包含思考及结构化来源元数据，不等于最终摘要额度
     disable_thinking: bool = False
     reasoning_effort: Literal["low", "high", "max"] = "low"
 

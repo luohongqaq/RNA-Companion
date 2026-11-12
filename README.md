@@ -360,6 +360,8 @@ cd backend
 
 `tests/live` 需要真实模型密钥，默认不随单元/集成测试运行；启用方式见该文件头部说明。
 
+单元测试只能保证不崩溃。改了提示词之后输出会整体偏移，这类变化不会让任何断言失败——如何用历史对话回放来比较效果、看哪些指标、以及这些指标的局限，见 [backend/scripts/replay-guide.md](backend/scripts/replay-guide.md)。
+
 ## 打包与发布
 
 构建免安装的 Windows 便携版（exe + backend 组合成 zip）：

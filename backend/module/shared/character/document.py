@@ -11,9 +11,11 @@ class CharacterSelectionView:
     name: str
     rules: str
     source_hash: str
+    user_appellation: str = ""  # 角色对用户的称呼，记忆总结用它替换 {{ user_name }}
 
     def selection_context(self) -> dict[str, str]:
-        return {"character_name": self.name, "rules": self.rules, "source_hash": self.source_hash}
+        return {"character_name": self.name, "rules": self.rules, "source_hash": self.source_hash,
+                "user_appellation": self.user_appellation}
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,11 +24,14 @@ class CharacterCardDocument:
 
     character_name: str
     content: str
+    user_appellation: str = ""
 
     def selection_view(self) -> CharacterSelectionView:
         text = self.content.replace("\r\n", "\n")
         rules = "\n\n".join(self._section(text, title) for title in SELECTION_SECTIONS)
-        return CharacterSelectionView(self.character_name, rules, hashlib.sha256(text.encode("utf-8")).hexdigest())
+        return CharacterSelectionView(self.character_name, rules,
+                                      hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                                      self.user_appellation)
 
     @staticmethod
     def validate_selection_sections(text: str) -> None:
